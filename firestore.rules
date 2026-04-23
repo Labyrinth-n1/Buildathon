@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definitions
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { return isSignedIn() && (
+      request.auth.token.email == 'steenaadisso@gmail.com' ||
+      exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+    ); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.keys().size() == 5 && // uid, email, role, displayName, createdAt
+             data.uid == request.auth.uid &&
+             data.email == request.auth.token.email &&
+             data.role in ['health_worker', 'admin'] &&
+             data.createdAt == request.time;
+    }
+
+    function isValidCase(data) {
+      return data.keys().hasAll(['id', 'userId', 'timestamp']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.timestamp == request.time &&
+             (data.symptoms is list && data.symptoms.size() <= 20) &&
+             (data.description is string && data.description.size() <= 2000);
+    }
+
+    function isValidAlert(data) {
+      return data.keys().hasAll(['id', 'type', 'riskLevel', 'timestamp']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.timestamp == request.time;
+    }
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && 
+                      incoming().diff(existing()).affectedKeys().hasOnly(['displayName']) &&
+                      incoming().uid == existing().uid &&
+                      incoming().email == existing().email &&
+                      incoming().role == existing().role;
+    }
+
+    // 2. Cases
+    match /cases/{caseId} {
+      allow get: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(caseId) && isValidCase(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 3. Alerts (System Generated)
+    match /alerts/{alertId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin(); // Only admins or system processes can broadcast alerts
+    }
+    
+    // 4. Admins (Manual list)
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via internal console
+    }
+  }
+}

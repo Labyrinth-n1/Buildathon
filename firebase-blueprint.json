@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "health_worker"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Case": {
+      "title": "Patient Case",
+      "description": "A single health assessment entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "symptoms": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "city": { "type": "string" }
+          }
+        },
+        "age": { "type": "number" },
+        "gender": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "diseases": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "severity": { "type": "string" },
+            "confidence": { "type": "number" }
+          }
+        }
+      },
+      "required": ["id", "userId", "timestamp"]
+    },
+    "Alert": {
+      "title": "Epidemic Alert",
+      "description": "AI generated alerts for outbreaks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "location": { "type": "string" },
+        "riskLevel": { "type": "string" },
+        "justification": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "type", "riskLevel", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/cases/{caseId}": {
+      "schema": "Case",
+      "description": "Historical health assessments"
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "System-wide epidemic alerts"
+    }
+  }
+}
